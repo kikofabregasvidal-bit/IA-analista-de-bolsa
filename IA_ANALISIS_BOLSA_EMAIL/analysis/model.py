@@ -1,162 +1,108 @@
 import os
 import yfinance as yf
-import matplotlib.pyplot as plt
 import pandas as pd
-
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import cm
+import matplotlib.pyplot as plt
 
 
-# =========================
-# FUNCIÓN PRINCIPAL
-# =========================
-def analyze_stock(ticker, start_date="2020-01-01"):
-    print("📥 Descargando datos...")
+def analyze_stock(ticker: str, start_date: str):
+    try:
+        # =========================
+        # DESCARGA DE DATOS
+        # =========================
+        data = yf.download(ticker, start=start_date, progress=False)
 
-    data = yf.download(ticker, start=start_date)
+        if data.empty:
+            return None, None
 
-    if data.empty:
-        print("❌ No se han podido descargar datos")
-        return None, None
+        # Forzar a Series (CLAVE para evitar errores)
+        close = data["Close"].squeeze()
 
-    # =========================
-    # INDICADORES
-    # =========================
-    data["MA20"] = data["Close"].rolling(20).mean()
-    data["MA50"] = data["Close"].rolling(50).mean()
+        # =========================
+        # INDICADORES TÉCNICOS
+        # =========================
 
-    # RSI
-    delta = data["Close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
+        # Medias móviles
+        ma20 = close.rolling(20).mean()
+        ma50 = close.rolling(50).mean()
 
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
+        # RSI
+        delta = close.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
 
-    rs = avg_gain / avg_loss
-    data["RSI"] = 100 - (100 / (1 + rs))
+        avg_gain = gain.rolling(14).mean()
+        avg_loss = loss.rolling(14).mean()
 
-    # Últimos valores (⚠️ convertir a float)
-    last_close = float(data["Close"].iloc[-1])
-    ma20 = float(data["MA20"].iloc[-1])
-    ma50 = float(data["MA50"].iloc[-1])
-    rsi = float(data["RSI"].iloc[-1])
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        rsi_last = float(rsi.iloc[-1])
 
-    # =========================
-    # EVALUACIÓN "IA"
-    # =========================
-    if ma20 > ma50 and rsi < 70:
-        decision = (
-            "ESCENARIO FAVORABLE 📈\n"
-            "La tendencia es alcista (MA20 > MA50).\n"
-            "El RSI no muestra sobrecompra.\n"
-            "Podría ser un contexto positivo para invertir, "
-            "aunque siempre con gestión del riesgo."
-        )
-    elif rsi > 70:
-        decision = (
-            "ESCENARIO DE RIESGO ⚠️\n"
-            "El RSI indica sobrecompra.\n"
-            "El precio podría corregir en el corto plazo.\n"
-            "Conviene extremar la prudencia."
-        )
-    elif rsi < 30:
-        decision = (
-            "ESCENARIO ESPECULATIVO 🔄\n"
-            "El RSI indica sobreventa.\n"
-            "Podría producirse un rebote, "
-            "pero el riesgo sigue siendo elevado."
-        )
-    else:
-        decision = (
-            "ESCENARIO NEUTRAL ⚖️\n"
-            "No hay una señal técnica clara.\n"
-            "El mercado se encuentra en fase de indecisión."
-        )
+        # Bandas de Bollinger
+        std20 = close.rolling(20).std()
+        bb_upper = ma20 + 2 * std20
+        bb_lower = ma20 - 2 * std20
 
-    # =========================
-    # TEXTO DEL INFORME
-    # =========================
-    report = f"""
-INFORME DE ANÁLISIS BURSÁTIL (IA)
+        # =========================
+        # ÚLTIMOS VALORES
+        # =========================
+        last_price = float(close.iloc[-1])
+        ma20_last = float(ma20.iloc[-1])
+        ma50_last = float(ma50.iloc[-1])
 
-Empresa analizada: {ticker}
+        # =========================
+        # EVALUACIÓN "IA"
+        # =========================
+        if ma20_last > ma50_last and rsi_last < 70:
+            decision = "Escenario favorable 📈\nTendencia alcista sin sobrecompra."
+        elif rsi_last > 70:
+            decision = "Escenario de riesgo ⚠️\nRSI en sobrecompra."
+        elif rsi_last < 30:
+            decision = "Escenario especulativo 🔄\nRSI en sobreventa."
+        else:
+            decision = "Escenario neutral ⏸️\nSin señal clara."
 
-Precio actual: {last_close:.2f} €
-Media móvil 20 sesiones (MA20): {ma20:.2f}
-Media móvil 50 sesiones (MA50): {ma50:.2f}
-RSI (14): {rsi:.2f}
+        # =========================
+        # GRÁFICO
+        # =========================
+        os.makedirs("results/plots", exist_ok=True)
 
-Evaluación técnica:
+        plt.figure(figsize=(10, 5))
+        plt.plot(close, label="Precio", color="white")
+        plt.plot(ma20, label="MA20", color="orange")
+        plt.plot(ma50, label="MA50", color="green")
+        plt.plot(bb_upper, linestyle="--", color="red", alpha=0.6)
+        plt.plot(bb_lower, linestyle="--", color="red", alpha=0.6)
+        plt.title(f"Análisis técnico - {ticker}")
+        plt.legend()
+        plt.grid(alpha=0.3)
+
+        plot_path = f"results/plots/{ticker}_grafico.png"
+        plt.savefig(plot_path, bbox_inches="tight")
+        plt.close()
+
+        # =========================
+        # INFORME TEXTO
+        # =========================
+        report = f"""
+ANÁLISIS TÉCNICO — {ticker}
+
+Precio actual: {last_price:.2f}
+MA20: {ma20_last:.2f}
+MA50: {ma50_last:.2f}
+RSI: {rsi_last:.2f}
+
+Evaluación:
 {decision}
 
-Conclusión:
-Este análisis se basa en datos históricos y en indicadores técnicos.
-No constituye una recomendación de inversión.
+⚠️ Análisis educativo. No es una recomendación de inversión.
 """
 
-    # =========================
-    # GRÁFICO
-    # =========================
-    os.makedirs("results/plots", exist_ok=True)
+        return report, plot_path
 
-    plot_path = "results/plots/grafico.png"
+    except Exception as e:
+        print("ERROR EN ANALYZE_STOCK:", e)
+        return None, None
 
-    plt.figure(figsize=(10, 5))
-    plt.plot(data.index, data["Close"], label="Precio")
-    plt.plot(data.index, data["MA20"], label="MA20")
-    plt.plot(data.index, data["MA50"], label="MA50")
-    plt.title(f"Análisis técnico - {ticker}")
-    plt.xlabel("Fecha")
-    plt.ylabel("Precio (€)")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(plot_path)
-    plt.close()
-
-    return report, plot_path
-
-
-# =========================
-# PDF
-# =========================
-def create_pdf(report_text, image_path, output_path):
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    c = canvas.Canvas(output_path, pagesize=A4)
-    width, height = A4
-
-    # Título
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(2 * cm, height - 2 * cm, "Informe de Análisis Bursátil (IA)")
-
-    # Texto
-    c.setFont("Helvetica", 10)
-    text = c.beginText(2 * cm, height - 3.5 * cm)
-
-    for line in report_text.split("\n"):
-        text.textLine(line)
-
-    c.drawText(text)
-
-    # Nueva página para gráfico
-    c.showPage()
-
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(2 * cm, height - 2 * cm, "Gráfico técnico")
-
-    c.drawImage(
-        image_path,
-        2 * cm,
-        height / 2 - 2 * cm,
-        width=16 * cm,
-        preserveAspectRatio=True,
-        mask="auto",
-    )
-
-    c.save()
 
 
 
