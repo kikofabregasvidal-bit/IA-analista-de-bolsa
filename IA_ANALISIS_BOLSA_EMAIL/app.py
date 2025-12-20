@@ -122,6 +122,7 @@ ticker = st.selectbox(
         "SAN.MC",
         "BBVA.MC",
         "IBE.MC",
+        "ALM.MC",
         "AAPL",
         "MSFT",
         "NVDA",
