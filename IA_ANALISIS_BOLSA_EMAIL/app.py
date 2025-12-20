@@ -1,51 +1,99 @@
 import streamlit as st
-import os
-from analysis.model import analyze_stock, create_pdf
+from analysis.model import analyze_stock
 
+# ===============================
+# CONFIGURACIÓN DE LA PÁGINA
+# ===============================
 st.set_page_config(
     page_title="IA de Análisis Bursátil",
+    page_icon="📈",
     layout="centered"
 )
 
-st.title("📈 IA de Análisis Bursátil")
-st.write("Análisis técnico educativo (MA20, MA50 y RSI)")
-st.caption("Basado en datos históricos hasta el último cierre disponible")
+# ===============================
+# CABECERA
+# ===============================
+st.markdown(
+    """
+    <h1 style="text-align:center;">📈 IA de Análisis Bursátil</h1>
+    <p style="text-align:center; font-size:18px;">
+        Análisis técnico educativo basado en <b>MA20, MA50 y RSI</b><br>
+        <span style="font-size:14px;">Datos históricos hasta el último cierre disponible</span>
+    </p>
+    <hr>
+    """,
+    unsafe_allow_html=True
+)
 
-# Selector de empresa
+# ===============================
+# SELECTOR DE EMPRESA
+# ===============================
+st.subheader("🏢 Selecciona una empresa")
+
 ticker = st.selectbox(
-    "Selecciona una empresa:",
+    "Empresa",
     [
-        "ITX.MC", "SAN.MC", "BBVA.MC", "IBE.MC",
-        "AAPL", "MSFT", "NVDA", "TSLA"
+        "ITX.MC",   # Inditex
+        "SAN.MC",   # Santander
+        "BBVA.MC",
+        "IBE.MC",
+        "AAPL",
+        "MSFT",
+        "NVDA",
+        "TSLA"
     ]
 )
 
-# Botón principal
-if st.button("Analizar"):
-    with st.spinner("Analizando datos..."):
-        report, plot_path = analyze_stock(ticker, "2020-01-01")
+# ===============================
+# BOTÓN DE ANÁLISIS
+# ===============================
+st.markdown("<br>", unsafe_allow_html=True)
+analyze = st.button("🔍 Analizar empresa", use_container_width=True)
+
+# ===============================
+# RESULTADOS
+# ===============================
+if analyze:
+    with st.spinner("Analizando datos y generando informe..."):
+        report, plot_path, pdf_path = analyze_stock(
+            ticker=ticker,
+            start_date="2020-01-01"
+        )
 
     if report is None:
-        st.error("No se ha podido realizar el análisis.")
+        st.error("❌ No se ha podido realizar el análisis.")
     else:
-        st.success("Análisis completado")
+        st.success("✅ Análisis completado")
 
-        # Mostrar gráfico
-        st.image(plot_path)
+        # ----- GRÁFICO -----
+        st.subheader("📊 Gráfico técnico")
+        st.image(plot_path, use_column_width=True)
 
-        # Mostrar texto
+        # ----- TEXTO DEL INFORME -----
+        st.subheader("🧠 Evaluación del análisis")
         st.text(report)
 
-        # Crear PDF
-        os.makedirs("results/reports", exist_ok=True)
-        pdf_path = f"results/reports/informe_{ticker}.pdf"
-        create_pdf(report, plot_path, pdf_path)
+        # ----- DESCARGA PDF -----
+        if pdf_path:
+            with open(pdf_path, "rb") as f:
+                st.download_button(
+                    label="📄 Descargar informe en PDF",
+                    data=f,
+                    file_name=pdf_path.split("/")[-1],
+                    mime="application/pdf",
+                    use_container_width=True
+                )
 
-        # Botón de descarga
-        with open(pdf_path, "rb") as pdf_file:
-            st.download_button(
-                label="📥 Descargar informe en PDF",
-                data=pdf_file,
-                file_name=f"informe_{ticker}.pdf",
-                mime="application/pdf"
-            )
+# ===============================
+# PIE DE PÁGINA
+# ===============================
+st.markdown(
+    """
+    <hr>
+    <p style="text-align:center; font-size:13px;">
+        ⚠️ Proyecto educativo · No constituye recomendación de inversión<br>
+        Creado con Python · Streamlit · yfinance
+    </p>
+    """,
+    unsafe_allow_html=True
+)
